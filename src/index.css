@@ -1,0 +1,43 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-50 font-sans;
+  /* Apply global smooth transitions for background and text color */
+  @apply transition-colors duration-300 ease-in-out;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-heading text-primary-blue-700 dark:text-primary-blue-300; /* Use a heading font */
+}
+
+img {
+  @apply rounded-lg; /* Slightly larger default rounded corners for images */
+}
+
+/* Global hover effects for interactive elements */
+a, button, input[type="submit"] {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Keyframes for fade-in animation (for modals/overlays) */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Keyframes for scale-in animation (for modals/overlays) */
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
+}

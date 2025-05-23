@@ -1,0 +1,11 @@
+# .gitignore
+node_modules/
+dist/ # Ignore the built output, Netlify will build it
+.env
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# IDE and OS specific files
+.idea/
+.vscode/
