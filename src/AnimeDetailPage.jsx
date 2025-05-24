@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import AnimeCharacters from "./components/AnimeCharacters";
 import AnimeRecommendations from "./components/AnimeRecommendations";
-import CommentsSection from "./components/CommentsSection";
+import CommentsSection from "./components/CommentsSection"; // Assuming you have this
 
 // New Skeleton Component for Detail Page
 const AnimeDetailSkeleton = () => (
@@ -15,40 +15,15 @@ const AnimeDetailSkeleton = () => (
       <div className="h-8 bg-gray-300 dark:bg-gray-700 rounded w-full mb-6"></div> {/* Trailer placeholder */}
       <div className="h-24 bg-gray-300 dark:bg-gray-700 rounded w-full mb-6"></div> {/* Synopsis placeholder */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {[...Array(6)].map((_, i) => (
+        {[...Array(4)].map((_, i) => ( // Placeholders for details
           <div key={i} className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-full"></div>
         ))}
       </div>
-      <div className="h-10 bg-gray-300 dark:bg-gray-700 rounded w-full mb-6"></div> {/* Genres placeholder */}
       <div className="h-12 bg-gray-300 dark:bg-gray-700 rounded w-full"></div> {/* Favorite button placeholder */}
     </div>
-
-    {/* Characters section skeleton */}
-    <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-      <div className="h-8 bg-gray-300 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="border rounded p-2">
-            <div className="w-24 h-24 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-1"></div> {/* Fixed size for character skeleton */}
-            <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
-            <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/2 mx-auto mt-1"></div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    {/* Recommendations section skeleton */}
-    <section>
-      <div className="h-8 bg-gray-300 dark:bg-gray-700 rounded w-1/2 mb-4"></div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="border rounded p-2">
-            <div className="w-full h-40 bg-gray-300 dark:bg-gray-700 rounded mb-1"></div>
-            <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
-          </div>
-        ))}
-      </div>
-    </section>
+    <div className="h-48 bg-gray-300 dark:bg-gray-700 rounded-xl shadow-lg p-6 mb-8"></div> {/* Characters section placeholder */}
+    <div className="h-48 bg-gray-300 dark:bg-gray-700 rounded-xl shadow-lg p-6 mb-8"></div> {/* Recommendations section placeholder */}
+    <div className="h-48 bg-gray-300 dark:bg-gray-700 rounded-xl shadow-lg p-6"></div> {/* Comments section placeholder */}
   </div>
 );
 
@@ -62,238 +37,196 @@ export default function AnimeDetailPage() {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
 
-  // User review state (moved from previous internal section)
-  const [userComment, setUserComment] = useState("");
-  const [userRating, setUserRating] = useState(0);
-  const [savedReview, setSavedReview] = useState(null); // This might be handled by CommentsSection now
+  // States for "Show More/Less" functionality
+  const [showAllCharacters, setShowAllCharacters] = useState(false);
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false);
+
+  const initialCharactersLimit = 8; // Number of characters to show initially
+  const initialRecommendationsLimit = 5; // Number of recommendations to show initially
+
 
   useEffect(() => {
-    // Check if anime is in favorites on load
-    const favorites = JSON.parse(localStorage.getItem("favorites")) || [];
-    setIsFavorite(favorites.some((fav) => fav.mal_id === parseInt(id)));
-
-    async function fetchDetails() {
+    async function fetchAnimeDetails() {
       setLoading(true);
       setError(null);
-
-      // --- Caching Logic Start ---
-      const cachedData = localStorage.getItem(`anime_${id}`);
-      if (cachedData) {
-        const { animeData, charData, recData, timestamp } = JSON.parse(cachedData);
-        const cacheExpiry = 1000 * 60 * 60; // Cache for 1 hour (adjust as needed)
-        if (Date.now() - timestamp < cacheExpiry) {
-          setAnime(animeData);
-          setCharacters(charData || []);
-          setRecommendations(recData || []);
-          setLoading(false);
-          console.log("Data loaded from cache for anime ID:", id);
-          return; // Exit if data is fresh from cache
-        } else {
-          console.log("Cache expired for anime ID:", id);
-          localStorage.removeItem(`anime_${id}`); // Clear expired cache
-        }
-      }
-      // --- Caching Logic End ---
-
       try {
-        const [animeRes, charRes, recRes] = await Promise.all([
-          fetch(`https://api.jikan.moe/v4/anime/${id}`),
-          fetch(`https://api.jikan.moe/v4/anime/${id}/characters`),
-          fetch(`https://api.jikan.moe/v4/anime/${id}/recommendations`)
-        ]);
-
-        if (!animeRes.ok) throw new Error(`Failed to load anime details: ${animeRes.status} ${animeRes.statusText}`);
-        if (!charRes.ok) throw new Error(`Failed to load characters: ${charRes.status} ${charRes.statusText}`);
-        if (!recRes.ok) {
-          const errorText = await recRes.text(); // Try to read response body for more info
-          throw new Error(`Failed to load recommendations: ${recRes.status} ${recRes.statusText}. Response: ${errorText}`);
+        const response = await fetch(`/api/anime/${id}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        const data = await response.json();
+        setAnime(data.data); // Assuming data.data holds the anime object
 
-        const animeData = await animeRes.json();
-        const charData = await charRes.json();
-        const recData = await recRes.json();
+        // Fetch characters
+        const charactersResponse = await fetch(`/api/anime/${id}/characters`);
+        if (!charactersResponse.ok) {
+          throw new Error(`HTTP error! status: ${charactersResponse.status}`);
+        }
+        const charactersData = await charactersResponse.json();
+        setCharacters(charactersData.data || []); // Assuming data.data is an array of characters
 
-        setAnime(animeData.data);
-        setCharacters(charData.data || []);
-        setRecommendations(recData.data || []);
+        // Fetch recommendations
+        const recommendationsResponse = await fetch(`/api/anime/${id}/recommendations`);
+        if (!recommendationsResponse.ok) {
+          throw new Error(`HTTP error! status: ${recommendationsResponse.status}`);
+        }
+        const recommendationsData = await recommendationsResponse.json();
+        setRecommendations(recommendationsData.data || []); // Assuming data.data is an array of recommendations
 
-        // --- Store in Cache on Success ---
-        localStorage.setItem(`anime_${id}`, JSON.stringify({
-          animeData: animeData.data,
-          charData: charData.data,
-          recData: recData.data,
-          timestamp: Date.now()
-        }));
-        // --- End Store in Cache ---
+        // Check if anime is in favorites (dummy implementation)
+        const favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+        setIsFavorite(favorites.some(fav => fav.mal_id === data.data.mal_id));
 
       } catch (err) {
-        console.error(err);
         setError(err.message);
+        console.error("Failed to fetch anime details:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchDetails();
-  }, [id]); // Re-fetch when ID changes
+
+    if (id) {
+      fetchAnimeDetails();
+    }
+  }, [id]);
 
   const handleToggleFavorite = () => {
-    let favorites = JSON.parse(localStorage.getItem("favorites")) || [];
+    const favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+    let updatedFavorites;
     if (isFavorite) {
-      favorites = favorites.filter((fav) => fav.mal_id !== anime.mal_id);
+      updatedFavorites = favorites.filter(fav => fav.mal_id !== anime.mal_id);
     } else {
-      favorites.push({
-        mal_id: anime.mal_id,
-        title: anime.title,
-        images: anime.images, // Save images for card display
-        score: anime.score
-      });
+      updatedFavorites = [...favorites, anime];
     }
-    localStorage.setItem("favorites", JSON.stringify(favorites));
+    localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
     setIsFavorite(!isFavorite);
   };
 
-  // This handleSaveReview is likely replaced by CommentsSection now, keeping for context if needed
-  const handleSaveReview = () => {
-    if (userComment.trim() || userRating > 0) {
-      setSavedReview({ comment: userComment, rating: userRating });
-      setUserComment("");
-      setUserRating(0);
-      alert("Review saved!");
-    }
-  };
+  if (loading) {
+    return <AnimeDetailSkeleton />;
+  }
 
-  if (loading) return <AnimeDetailSkeleton />;
-  if (error) return <p className="text-red-500 text-center mt-10">Error: {error}</p>;
-  if (!anime) return <p className="text-center mt-10">Anime not found</p>;
+  if (error) {
+    return <p className="text-red-500 text-center text-lg mt-8 dark:text-red-400">Error: {error}</p>;
+  }
 
-  // Function to handle studio/producer click
-  const handleCompanyClick = (companyName) => {
-    alert(`Navigating to page for ${companyName}`);
-    console.log(`Company clicked: ${companyName}`);
-    // Here you would typically navigate to a /company/:id page
-  };
+  if (!anime) {
+    return <p className="text-center text-lg mt-8 dark:text-gray-300">Anime not found.</p>;
+  }
 
+  const displayedCharacters = showAllCharacters ? characters : characters.slice(0, initialCharactersLimit);
+  const displayedRecommendations = showAllRecommendations ? recommendations : recommendations.slice(0, initialRecommendationsLimit);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Link to="/" className="text-blue-600 hover:underline mb-4 block">
-        ← Back to Home
+    <div className="max-w-4xl mx-auto p-6 dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white">
+      <Link
+        to="/"
+        className="text-blue-500 hover:underline mb-6 inline-block text-lg"
+      >
+        &larr; Back to Home
       </Link>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
-        <h1 className="text-3xl font-bold mb-4 text-center text-primary-blue-700 dark:text-primary-blue-300">
-          {anime.title}
-        </h1>
-        <img
-          src={anime.images?.jpg.large_image_url}
-          alt={anime.title}
-          className="rounded w-full max-h-[500px] object-cover mb-6"
-        />
-
-        {/* Trailer */}
-        {anime.trailer?.embed_url && (
-          <div className="mb-6 aspect-w-16 aspect-h-9">
-            <iframe
-              src={anime.trailer.embed_url}
-              title="Trailer"
-              allowFullScreen
-              className="w-full h-full rounded"
-            />
-          </div>
-        )}
-
-        <p className="mb-4 text-gray-700 dark:text-gray-300">{anime.synopsis}</p>
-
-        <div className="mb-4 grid grid-cols-2 gap-4 text-gray-700 dark:text-gray-300">
-          <div>
-            <strong>Type:</strong> {anime.type}
-          </div>
-          <div>
-            <strong>Status:</strong> {anime.status}
-          </div>
-          <div>
-            <strong>Episodes:</strong> {anime.episodes ?? "?"}
-          </div>
-          <div>
-            <strong>Score:</strong> {anime.score ?? "N/A"}
-          </div>
-          <div>
-            <strong>Rating:</strong> {anime.rating}
-          </div>
-          <div>
-            <strong>Aired:</strong> {anime.aired?.string ?? "N/A"}
-          </div>
-          {/* Studios */}
-          {anime.studios && anime.studios.length > 0 && (
-            <div>
-              <strong>Studios:</strong>{" "}
-              {anime.studios.map((s) => (
-                <span
-                  key={s.mal_id}
-                  onClick={() => handleCompanyClick(s.name)}
-                  className="cursor-pointer text-blue-600 hover:underline"
-                >
-                  {s.name}
-                </span>
-              )).reduce((prev, curr) => [prev, ", ", curr])}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6">
+        <div className="flex-shrink-0">
+          <img
+            src={anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url}
+            alt={anime.title}
+            className="rounded-lg shadow-md w-64 h-auto object-cover"
+          />
+        </div>
+        <div className="flex-grow text-center md:text-left">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            {anime.title}
+          </h1>
+          <p className="text-lg text-gray-700 dark:text-gray-300 mb-2">
+            **Score:** {anime.score || 'N/A'} (Rank: {anime.rank || 'N/A'})
+          </p>
+          <p className="text-md text-gray-600 dark:text-gray-400 mb-4">
+            **Episodes:** {anime.episodes || 'N/A'} | **Status:** {anime.status || 'N/A'} | **Aired:** {anime.aired?.string || 'N/A'}
+          </p>
+          {anime.trailer?.embed_url && (
+            <div className="mb-4 aspect-video w-full max-w-lg mx-auto md:mx-0">
+              <iframe
+                src={anime.trailer.embed_url}
+                title={`${anime.title} Trailer`}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full rounded-lg"
+              ></iframe>
             </div>
           )}
-          {/* Producers */}
-          {anime.producers && anime.producers.length > 0 && (
-            <div>
-              <strong>Producers:</strong>{" "}
-              {anime.producers.map((p) => (
+          <p className="text-gray-800 dark:text-gray-200 leading-relaxed mb-4">
+            {anime.synopsis || 'No synopsis available.'}
+          </p>
+          <div className="mb-4">
+            <span className="font-semibold text-gray-800 dark:text-gray-200">Genres:</span>{" "}
+            {anime.genres && anime.genres.length > 0 ? (
+              anime.genres.map((g) => (
                 <span
-                  key={p.mal_id}
-                  onClick={() => handleCompanyClick(p.name)}
-                  className="cursor-pointer text-blue-600 hover:underline"
+                  key={g.mal_id}
+                  className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full mr-2 mb-2 dark:bg-blue-900 dark:text-blue-100"
                 >
-                  {p.name}
+                  {g.name}
                 </span>
-              )).reduce((prev, curr) => [prev, ", ", curr])}
-            </div>
-          )}
-        </div>
+              ))
+            ) : (
+              <span className="text-gray-500 dark:text-gray-400">N/A</span>
+            )}
+          </div>
 
-        {/* Genres */}
-        <div className="mb-6">
-          <strong>Genres:</strong>{" "}
-          {anime.genres.map((g) => (
-            <span
-              key={g.mal_id}
-              className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full mr-2 mb-2 dark:bg-blue-900 dark:text-blue-100"
-            >
-              {g.name}
-            </span>
-          ))}
+          <button
+            onClick={handleToggleFavorite}
+            className={`w-full py-3 rounded-lg font-semibold text-lg transition duration-300 ease-in-out ${
+              isFavorite
+                ? "bg-red-500 text-white hover:bg-red-600 shadow-md transform active:scale-98"
+                : "bg-green-500 text-white hover:bg-green-600 shadow-md transform active:scale-98"
+            }`}
+          >
+            {isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+          </button>
         </div>
-
-        <button
-          onClick={handleToggleFavorite}
-          className={`w-full py-3 rounded-lg font-semibold text-lg transition duration-300 ease-in-out ${
-            isFavorite
-              ? "bg-red-500 text-white hover:bg-red-600 shadow-md transform active:scale-98"
-              : "bg-green-500 text-white hover:bg-green-600 shadow-md transform active:scale-98"
-          }`}
-        >
-          {isFavorite ? "Remove from Favorites" : "Add to Favorites"}
-        </button>
       </div>
 
       {/* Characters Section */}
-      <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-        <AnimeCharacters characters={characters} />
-      </section>
+      {characters.length > 0 && (
+        <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Characters</h2>
+          <AnimeCharacters characters={displayedCharacters} />
+          {characters.length > initialCharactersLimit && (
+            <button
+              onClick={() => setShowAllCharacters(!showAllCharacters)}
+              className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition duration-200"
+            >
+              {showAllCharacters ? "Show Less Characters" : "Show All Characters"}
+            </button>
+          )}
+        </section>
+      )}
 
       {/* Recommendations Section */}
-      <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-        <AnimeRecommendations recommendations={recommendations} />
-      </section>
+      {recommendations.length > 0 && (
+        <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Similar Anime (Recommendations)</h2>
+          <AnimeRecommendations recommendations={displayedRecommendations} />
+          {recommendations.length > initialRecommendationsLimit && (
+            <button
+              onClick={() => setShowAllRecommendations(!showAllRecommendations)}
+              className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition duration-200"
+            >
+              {showAllRecommendations ? "Show Less Recommendations" : "Show All Recommendations"}
+            </button>
+          )}
+        </section>
+      )}
 
-      {/* Comments & Ratings Section (using dedicated component) */}
-      <section className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+      {/* Comments Section (if you have one) */}
+      {/*
+      <section className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Comments</h2>
         <CommentsSection animeId={id} />
       </section>
+      */}
     </div>
   );
-}      
+}        
