@@ -1,11 +1,7 @@
-// src/SearchResults.jsx - Example of how you might expand filtering
-// (This is conceptual and requires your backend API to support these filters)
-
+// src/SearchResults.jsx
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import AnimeList, { AnimeListSkeleton } from "./components/AnimeList"; // Import skeleton as well
-// Assuming SearchFilter component is not directly used here, but its logic is inline.
-// If you have a separate SearchFilter.jsx, ensure it's imported correctly.
+import AnimeList, { AnimeListSkeleton } from "./AnimeList"; // Ensure AnimeList and its skeleton are imported
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -17,235 +13,184 @@ export default function SearchResults() {
   const initialType = queryParams.get("type") || "all";
   const initialSort = queryParams.get("sort") || "score";
 
-  const [anime, setAnime] = useState([]);
+  const [anime, setAnime] = useState([]); // This will hold the search results, no 'searchResults' state needed
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [type, setType] = useState(initialType);
   const [sort, setSort] = useState(initialSort);
-  const [genres, setGenres] = useState([]); // New state for multi-select genres
-  const [minScore, setMinScore] = useState(""); // New state for min score
+  const [genres, setGenres] = useState([]); // State for multi-select genres
+  const [minScore, setMinScore] = useState(""); // State for min score
 
   // Example list of all possible genres (you'd get this from your API or a static list)
   const allGenres = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Mecha', 'Music', 'Mystery', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller'];
 
   useEffect(() => {
-    async function fetchSearch() {
-      // If no search term is present initially, we might not want to fetch anything
-      // or fetch a default list (e.g., top anime). For now, it clears results.
-      if (!searchTerm) {
+    async function fetchSearchResults() {
+      setLoading(true);
+      setError(null); // Clear previous errors
+
+      const actualQuery = searchTerm.trim();
+
+      if (actualQuery.length > 0 && actualQuery.length < 3) {
+        setAnime([]); // Clear previous results if query is too short
         setLoading(false);
-        setAnime([]); // Clear results if no search term
+        setError("Please enter at least 3 characters to search.");
         return;
       }
-      setLoading(true);
-      setError(null);
 
-      // Construct API URL with all filters
-      // --- START OF CORRECTIONS ---
-      // Jikan API (v4) uses '/anime?q=' for search queries.
-      let apiUrl = `/api/anime?q=${encodeURIComponent(searchTerm)}`;
+      // Corrected API URL to use the Netlify proxy
+      let apiUrl = `/api/anime?q=${encodeURIComponent(actualQuery)}`;
 
-      // Add type filter
+      // Add filters to API URL
       if (type !== "all") {
         apiUrl += `&type=${type}`;
       }
-
-      // Add sort filter (Jikan API uses 'order_by' and 'sort' parameters)
-      // 'score' and 'popularity' are common 'order_by' values.
-      // 'desc' is typically used for higher scores/popularity first.
-      if (sort === "score") {
-          apiUrl += `&order_by=score&sort=desc`;
-      } else if (sort === "popularity") {
-          apiUrl += `&order_by=popularity&sort=desc`;
+      if (sort) { // Assuming sort is always present for ordering
+        apiUrl += `&order_by=${sort}&sort=desc`; // Jikan often uses order_by and sort
       }
-      // Add more sort options here if supported by Jikan API and your UI.
-
-      // Genre filtering: Jikan API expects genre *IDs*, not names.
-      // Your current `genres` state holds names.
-      // To filter by genre via API, you'd need a mapping from name to ID.
-      // For now, API-side genre filtering is commented out to prevent "Bad Request" if IDs are not used.
-      // Client-side genre filtering will still apply below.
-      /*
       if (genres.length > 0) {
-        // Example if you had a genreNameToIdMap:
-        // const genreIds = genres.map(name => genreNameToIdMap[name]).filter(Boolean);
-        // if (genreIds.length > 0) {
-        //   apiUrl += `&genres=${genreIds.join(',')}`;
-        // }
+        apiUrl += `&genres=${genres.join(',')}`;
       }
-      */
-
-      // Add minimum score filter
       if (minScore) {
         apiUrl += `&min_score=${minScore}`;
       }
-
-      // Add a limit to the number of results to prevent overwhelming the API
-      apiUrl += `&limit=25`; // You can adjust this limit as needed
-
-      console.log("Fetching search results from URL:", apiUrl); // Log the constructed URL for debugging
-      // --- END OF CORRECTIONS ---
+      apiUrl += `&limit=20`; // Limit number of results per page
 
       try {
         const response = await fetch(apiUrl);
         if (!response.ok) {
-            // Attempt to parse error response for more details
-            const errorData = await response.json().catch(() => ({ message: response.statusText || 'Unknown error' }));
-            throw new Error(`Failed to fetch search results. Status: ${response.status}. Message: ${errorData.message || 'No specific message from API.'}`);
+          if (response.status === 429) {
+            throw new Error("Too many requests. Please wait a moment before trying again.");
+          }
+          throw new Error(`Failed to fetch anime: ${response.statusText || response.status}`);
         }
         const data = await response.json();
-
-        // --- START OF CORRECTIONS ---
-        // Jikan API (v4) returns the main array of results within the 'data' property.
-        let filtered = data.data || []; // CORRECTED: Access data.data
-        // --- END OF CORRECTIONS ---
-
-        // Client-side filtering/sorting (as a fallback or for further refinement)
-        // These filters apply AFTER data is fetched from the API.
-        if (type !== "all") {
-            filtered = filtered.filter((a) => a.type?.toLowerCase() === type);
-        }
-        if (genres.length > 0) {
-            filtered = filtered.filter(a =>
-                a.genres && a.genres.some(g => genres.includes(g.name))
-            );
-        }
-        if (minScore) {
-            filtered = filtered.filter(a => (a.score || 0) >= parseFloat(minScore));
-        }
-
-        // Client-side sorting (if API sorting is not sufficient or for additional criteria)
-        filtered = filtered.sort((a, b) => {
-          if (sort === "score") return (b.score || 0) - (a.score || 0);
-          if (sort === "popularity") return (a.popularity || 99999) - (b.popularity || 99999);
-          // Add more client-side sorting logic here if needed
-          return 0;
-        });
-
-        setAnime(filtered);
+        setAnime(data.data || []);
       } catch (err) {
-        console.error("Fetch error in SearchResults:", err); // Log the full error to console
-        setError(err.message);
+        console.error("Search results fetch error:", err);
+        setError(err.message || "An unexpected error occurred during search.");
       } finally {
         setLoading(false);
       }
     }
-    fetchSearch();
-  }, [searchTerm, type, sort, genres, minScore]); // Re-fetch when any filter changes
+
+    // Only fetch if searchTerm is valid length or if it's initial load with empty query (to show no results)
+    if (searchTerm === "" || searchTerm.length >= 3) {
+      fetchSearchResults();
+    } else {
+      setLoading(false);
+      setAnime([]);
+    }
+  }, [searchTerm, type, sort, genres, minScore]); // Re-run effect when these dependencies change
 
   // Handlers for filter changes
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  const handleTypeChange = (e) => {
-    setType(e.target.value);
-  };
-
-  const handleSortChange = (e) => {
-    setSort(e.target.value);
-  };
-
+  const handleSearchChange = (e) => setSearchTerm(e.target.value);
+  const handleTypeChange = (e) => setType(e.target.value);
+  const handleSortChange = (e) => setSort(e.target.value);
+  const handleMinScoreChange = (e) => setMinScore(e.target.value);
   const handleGenreChange = (e) => {
-      const { value, checked } = e.target;
-      if (checked) {
-          setGenres(prev => [...prev, value]);
-      } else {
-          setGenres(prev => prev.filter(genre => genre !== value));
-      }
-  };
-
-  const handleMinScoreChange = (e) => {
-    setMinScore(e.target.value);
+    const { value, checked } = e.target;
+    setGenres((prev) =>
+      checked ? [...prev, value] : prev.filter((genre) => genre !== value)
+    );
   };
 
   const handleClearFilters = () => {
-      setSearchTerm(""); // Clear search term completely
-      setType("all");
-      setSort("score");
-      setGenres([]);
-      setMinScore("");
+    setSearchTerm("");
+    setType("all");
+    setSort("score");
+    setGenres([]);
+    setMinScore("");
+    // useEffect will re-run due to dependency changes and trigger a new fetch
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-center">Search Results for "{searchTerm}"</h1>
+    <div className="max-w-7xl mx-auto p-6">
+      <h1 className="text-4xl font-bold text-center mb-10 text-gray-800 dark:text-white">Anime Search Results</h1>
 
-      <form className="mb-8 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col gap-4">
-        <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-grow">
-                <label htmlFor="search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Term</label>
-                <input
-                    id="search-input"
-                    type="text"
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    placeholder="Refine search..."
-                    className="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
-                />
-            </div>
-            <div>
-                <label htmlFor="type-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
-                <select
-                    id="type-select"
-                    value={type}
-                    onChange={handleTypeChange}
-                    className="p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
-                >
-                    <option value="all">All Types</option>
-                    <option value="tv">TV</option>
-                    <option value="movie">Movie</option>
-                    <option value="ova">OVA</option>
-                    <option value="special">Special</option>
-                    <option value="ona">ONA</option>
-                    <option value="music">Music</option>
-                </select>
-            </div>
-            <div>
-                <label htmlFor="sort-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
-                <select
-                    id="sort-select"
-                    value={sort}
-                    onChange={handleSortChange}
-                    className="p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
-                >
-                    <option value="score">Score</option>
-                    <option value="popularity">Popularity</option>
-                    {/* Add more sort options if supported by API/client-side */}
-                </select>
-            </div>
-            <div>
-                <label htmlFor="min-score-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Score</label>
-                <input
-                    id="min-score-input"
-                    type="number"
-                    value={minScore}
-                    onChange={handleMinScoreChange}
-                    placeholder="e.g., 7.0"
-                    min="1" max="10" step="0.1"
-                    className="w-28 p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
-                />
-            </div>
+      <form className="mb-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl flex flex-col items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
+          {/* Search Input */}
+          <div>
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search Anime</label>
+            <input
+              type="text"
+              id="search"
+              placeholder="Search anime..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="mt-1 block w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Type Filter */}
+          <div>
+            <label htmlFor="type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
+            <select
+              id="type"
+              value={type}
+              onChange={handleTypeChange}
+              className="mt-1 block w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 dark:text-white"
+            >
+              <option value="all">All</option>
+              <option value="tv">TV</option>
+              <option value="movie">Movie</option>
+              <option value="ova">OVA</option>
+              <option value="special">Special</option>
+              <option value="ona">ONA</option>
+              <option value="music">Music</option>
+            </select>
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <label htmlFor="sort" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sort By</label>
+            <select
+              id="sort"
+              value={sort}
+              onChange={handleSortChange}
+              className="mt-1 block w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 dark:text-white"
+            >
+              <option value="score">Score</option>
+              <option value="popularity">Popularity</option>
+            </select>
+          </div>
+
+          {/* Min Score Filter */}
+          <div>
+            <label htmlFor="minScore" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Minimum Score</label>
+            <input
+              type="number"
+              id="minScore"
+              placeholder="e.g., 7.5"
+              value={minScore}
+              onChange={handleMinScoreChange}
+              min="1"
+              max="10"
+              step="0.1"
+              className="mt-1 block w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 dark:text-white"
+            />
+          </div>
         </div>
 
-        {/* Genre Multi-select */}
-        <div className="mt-4">
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Genres:</span>
-            <div className="flex flex-wrap gap-2">
-                {allGenres.map(genre => (
-                    <label key={genre} className="inline-flex items-center cursor-pointer px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 hover:bg-blue-200 dark:hover:bg-blue-800 transition duration-200">
-                        <input
-                            type="checkbox"
-                            value={genre}
-                            checked={genres.includes(genre)}
-                            onChange={handleGenreChange}
-                            className="form-checkbox h-4 w-4 text-blue-600 rounded mr-2 focus:ring-blue-500"
-                        />
-                        {genre}
-                    </label>
-                ))}
-            </div>
+        {/* Genre Filter */}
+        <div className="mt-6 w-full max-w-4xl">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Genres</label>
+          <div className="flex flex-wrap gap-2">
+            {allGenres.map((genre) => (
+              <label key={genre} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 hover:bg-blue-200 dark:hover:bg-blue-800 transition duration-200">
+                <input
+                  type="checkbox"
+                  value={genre}
+                  checked={genres.includes(genre)}
+                  onChange={handleGenreChange}
+                  className="form-checkbox h-4 w-4 text-blue-600 rounded mr-2 focus:ring-blue-500"
+                />
+                {genre}
+              </label>
+            ))}
+          </div>
         </div>
 
         <button
@@ -258,8 +203,7 @@ export default function SearchResults() {
       </form>
 
       {loading ? <AnimeListSkeleton /> : <AnimeList anime={anime} />}
-      {error && <p className="text-red-500 text-center text-lg mt-8">Error: {error}</p>}
-      {!loading && anime.length === 0 && <p className="text-center text-lg mt-8">No results found for "{searchTerm}" with selected filters.</p>}
+      {error && <p className="text-red-500 text-center text-lg mt-8">{error}</p>}
     </div>
   );
 }      
