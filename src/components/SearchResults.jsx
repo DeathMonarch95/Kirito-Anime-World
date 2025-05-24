@@ -69,7 +69,8 @@ export default function SearchResults() {
             urlParams.push(`q=${actualQuery}`);
         }
 
-        if (type !== "all") {
+        // ONLY add type if it's NOT "all"
+        if (type && type !== "all") { 
             urlParams.push(`type=${type}`);
         }
         if (sort) {
@@ -81,7 +82,7 @@ export default function SearchResults() {
         if (minScore) {
             urlParams.push(`min_score=${minScore}`);
         }
-        urlParams.push(`limit=20`); // Always include limit
+        urlParams.push(`limit=20`); // Always include limit=20 as per latest code
 
         const apiUrl = `/api/anime?${urlParams.join('&')}`;
 
@@ -220,18 +221,19 @@ export default function SearchResults() {
             <h3 className="block text-lg font-medium mb-2">Genres:</h3>
             <div className="flex flex-wrap gap-2">
                 {/* Ensure allGenres is populated and available */}
-                {allGenres.map((genre) => (
+                {/* Note: allGenres needs to be defined from the fetched genreMap or statically if not using API */}
+                {Object.keys(genreMap).map((genreName) => ( // Use genreMap keys for display
                     <label
-                        key={genre}
+                        key={genreName}
                         className="flex items-center cursor-pointer px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 hover:bg-blue-200 dark:hover:bg-blue-800 transition duration-200">
                         <input
                             type="checkbox"
-                            value={genre}
-                            checked={genres.includes(genre)}
+                            value={genreName} // Value is the name, but we send ID
+                            checked={genres.includes(genreName)}
                             onChange={handleGenreChange}
                             className="form-checkbox h-4 w-4 text-blue-600 rounded mr-2 focus:ring-blue-500"
                         />
-                        {genre}
+                        {genreName}
                     </label>
                 ))}
             </div>
@@ -273,4 +275,4 @@ function useDebounce(value, delay) {
     };
   }, [value, delay]);
   return debouncedValue;
-}         
+}
