@@ -262,4 +262,4 @@ export default function SearchResults() {
       {!loading && anime.length === 0 && <p className="text-center text-lg mt-8">No results found for "{searchTerm}" with selected filters.</p>}
     </div>
   );
-}
+}      

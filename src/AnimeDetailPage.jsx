@@ -296,4 +296,4 @@ export default function AnimeDetailPage() {
       </section>
     </div>
   );
-}
+}      
