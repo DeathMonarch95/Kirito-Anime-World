@@ -4,6 +4,8 @@
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import AnimeList, { AnimeListSkeleton } from "./components/AnimeList"; // Import skeleton as well
+// Assuming SearchFilter component is not directly used here, but its logic is inline.
+// If you have a separate SearchFilter.jsx, ensure it's imported correctly.
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -29,6 +31,8 @@ export default function SearchResults() {
 
   useEffect(() => {
     async function fetchSearch() {
+      // If no search term is present initially, we might not want to fetch anything
+      // or fetch a default list (e.g., top anime). For now, it clears results.
       if (!searchTerm) {
         setLoading(false);
         setAnime([]); // Clear results if no search term
@@ -38,19 +42,67 @@ export default function SearchResults() {
       setError(null);
 
       // Construct API URL with all filters
-      let apiUrl = `/api/anime/search?query=${encodeURIComponent(searchTerm)}`;
-      if (type !== "all") apiUrl += `&type=${type}`;
-      if (sort !== "score") apiUrl += `&sort=${sort}`; // Your API might need to handle this
-      if (genres.length > 0) apiUrl += `&genres=${genres.join(',')}`; // Pass selected genres
-      if (minScore) apiUrl += `&min_score=${minScore}`;
+      // --- START OF CORRECTIONS ---
+      // Jikan API (v4) uses '/anime?q=' for search queries.
+      let apiUrl = `/api/anime?q=${encodeURIComponent(searchTerm)}`;
+
+      // Add type filter
+      if (type !== "all") {
+        apiUrl += `&type=${type}`;
+      }
+
+      // Add sort filter (Jikan API uses 'order_by' and 'sort' parameters)
+      // 'score' and 'popularity' are common 'order_by' values.
+      // 'desc' is typically used for higher scores/popularity first.
+      if (sort === "score") {
+          apiUrl += `&order_by=score&sort=desc`;
+      } else if (sort === "popularity") {
+          apiUrl += `&order_by=popularity&sort=desc`;
+      }
+      // Add more sort options here if supported by Jikan API and your UI.
+
+      // Genre filtering: Jikan API expects genre *IDs*, not names.
+      // Your current `genres` state holds names.
+      // To filter by genre via API, you'd need a mapping from name to ID.
+      // For now, API-side genre filtering is commented out to prevent "Bad Request" if IDs are not used.
+      // Client-side genre filtering will still apply below.
+      /*
+      if (genres.length > 0) {
+        // Example if you had a genreNameToIdMap:
+        // const genreIds = genres.map(name => genreNameToIdMap[name]).filter(Boolean);
+        // if (genreIds.length > 0) {
+        //   apiUrl += `&genres=${genreIds.join(',')}`;
+        // }
+      }
+      */
+
+      // Add minimum score filter
+      if (minScore) {
+        apiUrl += `&min_score=${minScore}`;
+      }
+
+      // Add a limit to the number of results to prevent overwhelming the API
+      apiUrl += `&limit=25`; // You can adjust this limit as needed
+
+      console.log("Fetching search results from URL:", apiUrl); // Log the constructed URL for debugging
+      // --- END OF CORRECTIONS ---
 
       try {
         const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error("Failed to fetch search results");
+        if (!response.ok) {
+            // Attempt to parse error response for more details
+            const errorData = await response.json().catch(() => ({ message: response.statusText || 'Unknown error' }));
+            throw new Error(`Failed to fetch search results. Status: ${response.status}. Message: ${errorData.message || 'No specific message from API.'}`);
+        }
         const data = await response.json();
 
-        // Client-side filtering/sorting if API doesn't support all combinations
-        let filtered = data.results || [];
+        // --- START OF CORRECTIONS ---
+        // Jikan API (v4) returns the main array of results within the 'data' property.
+        let filtered = data.data || []; // CORRECTED: Access data.data
+        // --- END OF CORRECTIONS ---
+
+        // Client-side filtering/sorting (as a fallback or for further refinement)
+        // These filters apply AFTER data is fetched from the API.
         if (type !== "all") {
             filtered = filtered.filter((a) => a.type?.toLowerCase() === type);
         }
@@ -63,15 +115,17 @@ export default function SearchResults() {
             filtered = filtered.filter(a => (a.score || 0) >= parseFloat(minScore));
         }
 
+        // Client-side sorting (if API sorting is not sufficient or for additional criteria)
         filtered = filtered.sort((a, b) => {
           if (sort === "score") return (b.score || 0) - (a.score || 0);
           if (sort === "popularity") return (a.popularity || 99999) - (b.popularity || 99999);
-          // Add more sorting logic here
+          // Add more client-side sorting logic here if needed
           return 0;
         });
 
         setAnime(filtered);
       } catch (err) {
+        console.error("Fetch error in SearchResults:", err); // Log the full error to console
         setError(err.message);
       } finally {
         setLoading(false);
@@ -79,6 +133,19 @@ export default function SearchResults() {
     }
     fetchSearch();
   }, [searchTerm, type, sort, genres, minScore]); // Re-fetch when any filter changes
+
+  // Handlers for filter changes
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleTypeChange = (e) => {
+    setType(e.target.value);
+  };
+
+  const handleSortChange = (e) => {
+    setSort(e.target.value);
+  };
 
   const handleGenreChange = (e) => {
       const { value, checked } = e.target;
@@ -89,8 +156,12 @@ export default function SearchResults() {
       }
   };
 
+  const handleMinScoreChange = (e) => {
+    setMinScore(e.target.value);
+  };
+
   const handleClearFilters = () => {
-      setSearchTerm(initialSearchTerm); // Or just "" to clear completely
+      setSearchTerm(""); // Clear search term completely
       setType("all");
       setSort("score");
       setGenres([]);
@@ -99,7 +170,7 @@ export default function SearchResults() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-center">Search Results for "{initialSearchTerm}"</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">Search Results for "{searchTerm}"</h1>
 
       <form className="mb-8 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col gap-4">
         <div className="flex flex-wrap gap-4 items-end">
@@ -109,7 +180,7 @@ export default function SearchResults() {
                     id="search-input"
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchChange}
                     placeholder="Refine search..."
                     className="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
                 />
@@ -119,7 +190,7 @@ export default function SearchResults() {
                 <select
                     id="type-select"
                     value={type}
-                    onChange={(e) => setType(e.target.value)}
+                    onChange={handleTypeChange}
                     className="p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
                 >
                     <option value="all">All Types</option>
@@ -127,6 +198,8 @@ export default function SearchResults() {
                     <option value="movie">Movie</option>
                     <option value="ova">OVA</option>
                     <option value="special">Special</option>
+                    <option value="ona">ONA</option>
+                    <option value="music">Music</option>
                 </select>
             </div>
             <div>
@@ -134,7 +207,7 @@ export default function SearchResults() {
                 <select
                     id="sort-select"
                     value={sort}
-                    onChange={(e) => setSort(e.target.value)}
+                    onChange={handleSortChange}
                     className="p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
                 >
                     <option value="score">Score</option>
@@ -148,7 +221,7 @@ export default function SearchResults() {
                     id="min-score-input"
                     type="number"
                     value={minScore}
-                    onChange={(e) => setMinScore(e.target.value)}
+                    onChange={handleMinScoreChange}
                     placeholder="e.g., 7.0"
                     min="1" max="10" step="0.1"
                     className="w-28 p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition duration-300"
