@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import AnimeList, { AnimeListSkeleton } from "./components/AnimeList"; // Ensure AnimeList and its skeleton are imported
+import AnimeList from "./components/AnimeList";
+import AnimeListSkeleton from "./components/AnimeListSkeleton"; // Correct import for AnimeListSkeleton
 
 export default function Home() {
   const [seasonalAnime, setSeasonalAnime] = useState([]);
@@ -287,4 +288,4 @@ export default function Home() {
       )}
     </div>
   );
-}             
+}               
