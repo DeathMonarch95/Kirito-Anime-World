@@ -22,7 +22,7 @@ export function register(config) {
     }
 
     window.addEventListener('load', () => {
-      const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
+      const swUrl = `/service-worker.js`; // This tells it to look for service-worker.js directly at the root
 
       if (isLocalhost) {
         // This is running on localhost. Let's check if a service worker already exists.
@@ -128,4 +128,4 @@ export function unregister() {
         console.error(error.message);
       });
   }
-}
+}     
